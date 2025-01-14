@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/investment-profit",
+      "schedule": "0 0 * * *"
+    }
+  ]
+}
