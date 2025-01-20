@@ -4,15 +4,7 @@ import { options } from "@/app/api/auth/[...nextauth]/options";
 import connectDB from "@/utils/mongodb";
 import CreateInvestment from "@/models/CreateInvestment";
 import InvestmentInformation from "@/models/InvestmentInformation";
-
-const INVESTMENT_PLANS = {
-  BASIC: { name: "Basic", min: 1000, max: 1999 },
-  DELUXE: { name: "Deluxe", min: 2000, max: 4999 },
-  ENTERPRISE: { name: "Enterprise", min: 5000, max: 9999 },
-  GOLD: { name: "Gold", min: 10000, max: 14999 },
-  PREMIUM: { name: "Premium", min: 15000, max: 19999 },
-  PLATINUM: { name: "Platinum", min: 20000, max: 100000 },
-} as const;
+import { INVESTMENT_PLANS } from "@/data/investmentPlan";
 
 async function validateInvestment(userId: string, amount: number) {
   const investmentInfo = await InvestmentInformation.findOne({ userId }).exec();
@@ -21,12 +13,6 @@ async function validateInvestment(userId: string, amount: number) {
     throw new Error("Investment information not found");
   }
 
-  // Check for existing investment
-  if (investmentInfo.investmentAmount > 0) {
-    throw new Error("You have an active investment already");
-  }
-
-  // Check balance
   if (investmentInfo.accountBalance < amount) {
     throw new Error("You do not have enough balance for this plan");
   }
@@ -34,20 +20,60 @@ async function validateInvestment(userId: string, amount: number) {
   return investmentInfo;
 }
 
+function calculateInvestmentDetails(amount: number, planName: string) {
+  const plan = INVESTMENT_PLANS.find((p) => p.planName === planName);
+
+  if (!plan) {
+    throw new Error("Invalid investment plan");
+  }
+
+  const expectedReturn = amount * plan.returnRate;
+  const maturityAmount = amount + expectedReturn;
+  const maturityDate = new Date();
+  maturityDate.setDate(maturityDate.getDate() + plan.durationInDay);
+
+  const dailyReturn = expectedReturn / plan.durationInDay;
+
+  return {
+    initialAmount: amount,
+    expectedReturn,
+    maturityAmount,
+    maturityDate,
+    dailyReturn,
+    returnRate: plan.returnRate,
+    durationInDays: plan.durationInDay,
+  };
+}
+
 async function updateInvestmentInfo(
   userId: string,
   amount: number,
-  planName: string
+  planName: string,
+  investmentDetails: ReturnType<typeof calculateInvestmentDetails>
 ) {
   const investmentInfo = await InvestmentInformation.findOneAndUpdate(
     { userId },
     {
       $inc: {
         accountBalance: -amount,
-        investmentAmount: amount,
+        totalInvestmentAmount: amount,
+        "investmentStats.activeInvestmentsCount": 1,
+        "investmentStats.totalLifetimeInvestments": 1,
+      },
+      $push: {
+        activeInvestments: {
+          amount,
+          plan: planName,
+          startDate: new Date(),
+          maturityDate: investmentDetails.maturityDate,
+          expectedReturn: investmentDetails.expectedReturn,
+          dailyReturn: investmentDetails.dailyReturn,
+          currentReturn: 0,
+          status: "active",
+          lastReturnUpdate: new Date(),
+        },
       },
       $set: {
-        package: planName,
         lastInvestmentDate: new Date(),
         updatedAt: new Date(),
       },
@@ -75,7 +101,6 @@ export async function POST(req: NextRequest) {
     const planName = formData.get("plan") as string;
     const amount = Number(formData.get("amount"));
 
-    // Validate investment and balance
     try {
       await validateInvestment(session.user.id, amount);
     } catch (error) {
@@ -85,42 +110,49 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const planKey = Object.keys(INVESTMENT_PLANS).find(
-      (key) =>
-        INVESTMENT_PLANS[key as keyof typeof INVESTMENT_PLANS].name === planName
-    );
+    const plan = INVESTMENT_PLANS.find((p) => p.planName === planName);
 
-    if (!planKey) {
+    if (!plan) {
       return NextResponse.json(
         { message: "Invalid investment plan" },
         { status: 400 }
       );
     }
 
-    const plan = INVESTMENT_PLANS[planKey as keyof typeof INVESTMENT_PLANS];
-
     if (!amount || amount < plan.min || amount > plan.max) {
       return NextResponse.json(
         {
-          message: `Amount must be between $${plan.min} and $${plan.max} for ${plan.name} plan`,
+          message: `Amount must be between $${plan.min} and $${plan.max} for ${plan.planName} plan`,
         },
         { status: 400 }
       );
     }
 
-    // Create investment and update investment info
+    const investmentDetails = calculateInvestmentDetails(amount, planName);
+
     const investment = await CreateInvestment.create({
       userId: session.user.id,
       plan: planName,
-      amount,
+      amount: investmentDetails.initialAmount,
+      expectedReturn: investmentDetails.expectedReturn,
+      maturityAmount: investmentDetails.maturityAmount,
+      maturityDate: investmentDetails.maturityDate,
+      dailyReturn: investmentDetails.dailyReturn,
+      returnRate: investmentDetails.returnRate,
+      durationInDays: investmentDetails.durationInDays,
+      currentReturn: 0,
+      lastReturnUpdate: new Date(),
+      startDate: new Date(),
       status: "active",
+      returnHistory: [],
+      completionDate: null,
     });
 
-    // Update investment information
     const updatedInfo = await updateInvestmentInfo(
       session.user.id,
       amount,
-      planName
+      planName,
+      investmentDetails
     );
 
     return NextResponse.json(
@@ -134,7 +166,7 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error("Investment creation error:", error);
     return NextResponse.json(
-      { messsage: (error as Error).message || "Failed to process investment" },
+      { message: (error as Error).message || "Failed to process investment" },
       { status: 500 }
     );
   }
@@ -153,7 +185,34 @@ export async function GET() {
       userId: session.user.id,
     }).sort({ createdAt: -1 });
 
-    return NextResponse.json(investments);
+    // Calculate current returns for active investments
+    const updatedInvestments = investments.map((investment) => {
+      if (investment.status === "active") {
+        const daysSinceLastUpdate = Math.floor(
+          (new Date().getTime() -
+            new Date(investment.lastReturnUpdate).getTime()) /
+            (1000 * 60 * 60 * 24)
+        );
+
+        if (daysSinceLastUpdate > 0) {
+          investment.currentReturn +=
+            investment.dailyReturn * daysSinceLastUpdate;
+          investment.lastReturnUpdate = new Date();
+          investment.returnHistory.push({
+            date: new Date(),
+            amount: investment.currentReturn,
+          });
+        }
+      }
+      return investment;
+    });
+
+    // Save any updates
+    await Promise.all(
+      updatedInvestments.map((investment) => investment.save())
+    );
+
+    return NextResponse.json(updatedInvestments);
   } catch (error) {
     console.error("Error fetching investments:", error);
     return NextResponse.json(
@@ -182,16 +241,56 @@ export async function PATCH(req: NextRequest) {
       );
     }
 
-    const investment = await CreateInvestment.findOneAndUpdate(
-      { _id: investmentId, userId: session.user.id },
-      { status },
-      { new: true }
-    );
+    const investment = await CreateInvestment.findOne({
+      _id: investmentId,
+      userId: session.user.id,
+    });
 
     if (!investment) {
       return NextResponse.json(
         { message: "Investment not found" },
         { status: 404 }
+      );
+    }
+
+    // Calculate final return if completing investment
+    if (status === "completed") {
+      const daysSinceLastUpdate = Math.floor(
+        (new Date().getTime() -
+          new Date(investment.lastReturnUpdate).getTime()) /
+          (1000 * 60 * 60 * 24)
+      );
+
+      investment.currentReturn += investment.dailyReturn * daysSinceLastUpdate;
+      investment.completionDate = new Date();
+      investment.returnHistory.push({
+        date: new Date(),
+        amount: investment.currentReturn,
+      });
+    }
+
+    investment.status = status;
+    await investment.save();
+
+    // Update InvestmentInformation
+    if (status === "completed" || status === "cancelled") {
+      await InvestmentInformation.findOneAndUpdate(
+        { userId: session.user.id },
+        {
+          $pull: {
+            activeInvestments: {
+              amount: investment.amount,
+              plan: investment.plan,
+            },
+          },
+          $inc: {
+            activeInvestmentsCount: -1,
+            completedInvestmentsCount: status === "completed" ? 1 : 0,
+            cancelledInvestmentsCount: status === "cancelled" ? 1 : 0,
+            totalReturnsEarned:
+              status === "completed" ? investment.currentReturn : 0,
+          },
+        }
       );
     }
 

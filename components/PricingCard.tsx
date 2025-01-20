@@ -3,17 +3,19 @@ import PricingModal from './PricingModal';
 
 type PricingCardProps = {
     planName: string;
-    price: number;
-    minDeposit: number;
-    maxDeposit: number;
-    minReturns: number;
-    maxReturns: number;
-    giftBonus: number;
-    duration: string;
+    price: string;
+    minDeposit: string;
+    maxDeposit: string;
+    min: number;
+    max: number;
+    minReturns: string;
+    maxReturns: string;
+    giftBonus: string;
+    duration: number;
 
 }
 
-function PricingCard({ planName, price, minDeposit, maxDeposit, minReturns, maxReturns, giftBonus, duration }: PricingCardProps) {
+function PricingCard({ planName, price, minDeposit, maxDeposit, minReturns, maxReturns, giftBonus, duration, min, max }: PricingCardProps) {
     return (
         <div className="flex flex-col p-6 mx-auto w-full max-w-lg text-center text-gray-900 bg-white rounded-lg border border-gray-100 shadow dark:border-gray-600 xl:p-5 dark:bg-gray-800 dark:text-white">
             <h3 className="mb- text-xl font-semibold">{planName} Plan</h3>
@@ -49,7 +51,7 @@ function PricingCard({ planName, price, minDeposit, maxDeposit, minReturns, maxR
                 <li className="flex items-center justify-between space-x-3 text-sm">
 
                     <span>Duration:</span>
-                    <span className="font-semibold">{duration}</span>
+                    <span className="font-semibold">{duration} days</span>
                 </li>
                 <li className="flex items-center justify-between space-x-3 text-sm">
 
@@ -57,7 +59,7 @@ function PricingCard({ planName, price, minDeposit, maxDeposit, minReturns, maxR
                     <span className="font-semibold">{`($${price} default)`}</span>
                 </li>
             </ul>
-            <PricingModal planName={planName} maxDeposit={maxDeposit} minDeposit={minDeposit} />
+            <PricingModal planName={planName} maxDeposit={max} minDeposit={min} />
         </div>
     )
 }
