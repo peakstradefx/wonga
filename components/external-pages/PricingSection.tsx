@@ -1,7 +1,7 @@
 import React from 'react'
 import PricingCard from './PricingCard'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
-import { pricingDetails2 } from '@/data/pricingDetails2'
+import { INVESTMENT_PLANS } from '@/data/investmentPlan'
 
 function PricingSection() {
     return (
@@ -21,7 +21,7 @@ function PricingSection() {
                     <TabsContent value="regular" className='w-full'>
                         <div className="grid lg:grid-cols-3 sm:grid-cols-2 gap-6 mt-6 max-sm:max-w-sm max-sm:mx-auto">
                             {
-                                pricingDetails2.slice(0, 3).map((item) => {
+                                INVESTMENT_PLANS.slice(0, 3).map((item) => {
                                     return (
                                         <div key={item.id}>
                                             <PricingCard
@@ -32,7 +32,7 @@ function PricingSection() {
                                                 minReturns={item.minReturns}
                                                 maxReturns={item.maxReturns}
                                                 giftBonus={item.giftBonus}
-                                                duration={item.duration}
+                                                duration={item.durationInDay}
                                                 isPopular={item.isPopular}
                                             />
                                         </div>
@@ -44,7 +44,7 @@ function PricingSection() {
                     <TabsContent value="professional" className='w-full'>
                         <div className="grid lg:grid-cols-3 sm:grid-cols-2 gap-6 mt-6 max-sm:max-w-sm max-sm:mx-auto">
                             {
-                                pricingDetails2.slice(3, 6).map((item) => {
+                                INVESTMENT_PLANS.slice(3, 6).map((item) => {
                                     return (
                                         <div key={item.id}>
                                             <PricingCard
@@ -55,7 +55,7 @@ function PricingSection() {
                                                 minReturns={item.minReturns}
                                                 maxReturns={item.maxReturns}
                                                 giftBonus={item.giftBonus}
-                                                duration={item.duration}
+                                                duration={item.durationInDay}
                                                 isPopular={item.isPopular}
                                             />
                                         </div>
@@ -67,7 +67,7 @@ function PricingSection() {
                     <TabsContent value="veteran" className='w-full'>
                         <div className="grid lg:grid-cols-3 sm:grid-cols-2 gap-6 mt-6 max-sm:max-w-sm max-sm:mx-auto">
                             {
-                                pricingDetails2.slice(6, 9).map((item) => {
+                                INVESTMENT_PLANS.slice(6, 9).map((item) => {
                                     return (
                                         <div key={item.id}>
                                             <PricingCard
@@ -78,7 +78,7 @@ function PricingSection() {
                                                 minReturns={item.minReturns}
                                                 maxReturns={item.maxReturns}
                                                 giftBonus={item.giftBonus}
-                                                duration={item.duration}
+                                                duration={item.durationInDay}
                                                 isPopular={item.isPopular}
                                             />
                                         </div>

@@ -109,6 +109,8 @@ export async function GET(
           firstName: user.firstName,
           lastName: user.lastName,
           email: user.email,
+          phoneNumber: user.phoneNumber,
+          country: user.country,
           createdAt: user.createdAt,
           status: user.status,
           isActivatedByAdmin: user.isActivatedByAdmin,
@@ -119,7 +121,7 @@ export async function GET(
         investment: {
           accountBalance: investmentInfo?.accountBalance || 0,
           totalProfit: investmentInfo?.totalProfit || 0,
-          investmentAmount: investmentInfo?.investmentAmount || 0,
+          investmentAmount: investmentInfo?.totalInvestmentAmount || 0,
           package: investmentInfo?.package || "No investment",
           activeInvestments: investmentsWithProgress,
           recentlyCompleted: completedInvestments,

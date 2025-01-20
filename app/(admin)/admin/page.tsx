@@ -6,11 +6,14 @@ import SkeletonTable from '@/components/dashboard/SkeletonTable';
 import ReusableTable from '@/components/dashboard/Table';
 import { formatDateTime } from '@/utils/formatDateAndTime';
 import useGetUsers from '@/hooks/queries/useGetUsers';
-import { Eye, MoreHorizontal } from 'lucide-react';
+import { Eye, LogOut, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import Link from 'next/link';
 import DeleteUserModal from '@/components/admin/DeleteUserModal';
+import { signOut } from 'next-auth/react';
+import Image from 'next/image';
+import { logo } from "@/public/assets/images";
 
 type DataRow = {
     id: number;
@@ -21,9 +24,7 @@ type DataRow = {
 };
 
 const AdminPage = () => {
-
     const { data, isLoading } = useGetUsers()
-
 
     const tableData =
         (data?.data ?? []).map((item: {
@@ -31,6 +32,7 @@ const AdminPage = () => {
             firstName: string;
             lastName: string;
             email: string;
+            phoneNumber: string;
             investmentStatus: string;
             status: string;
             createdAt: string;
@@ -38,12 +40,14 @@ const AdminPage = () => {
             id: item._id,
             name: `${item.firstName} ${item.lastName}`,
             email: item.email,
+            phoneNumber: item.phoneNumber,
             date: formatDateTime(item.createdAt),
         })) as DataRow[];
 
     const columns: ColumnDef<DataRow>[] = [
         { accessorKey: 'name', header: 'Name' },
         { accessorKey: 'email', header: 'Email' },
+        { accessorKey: 'phoneNumber', header: 'Phone Number' },
         { accessorKey: 'date', header: 'Date created' },
         {
             id: 'actions',
@@ -80,7 +84,22 @@ const AdminPage = () => {
 
 
     return (
-        <section className='p-6 lg:p-10'>
+        <section className='p-2 lg:px-10 py-6'>
+            <div className="flex justify-">
+                <Link href={"/"} className="relative z-20 flex items-center text-lg font-medium">
+                    <Image src={logo} width={250} height={82} alt="PeakTrade fx logo" />
+                </Link>
+            </div>
+            <div className='flex w-full justify-between items-center my-4'>
+                <h1 className='text-3xl font-semibold'>Welcome, Admin</h1>
+                <button
+                    className="px-4 py-2 text-red-600 font-semibold inline-flex items-center gap-2 rounded-sm hover:bg-sidebar-accent w-fit mt-4"
+                    onClick={() => signOut({callbackUrl: "/auth/login"})}
+                >
+                    <LogOut className="h-5 w-5" />
+                    <span>Logout</span>
+                </button>
+            </div>
             <Card>
                 <CardHeader>
                     <CardTitle>User Management</CardTitle>
@@ -97,7 +116,7 @@ const AdminPage = () => {
                     )}
                 </CardContent>
             </Card>
-        </section>
+        </section >
     );
 };
 

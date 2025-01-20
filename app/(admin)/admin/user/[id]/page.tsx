@@ -102,12 +102,16 @@ function UserDetailsPage({ params }: { params: Promise<{ id: string }> }) {
                                     <span>{userDetails?.user.email}</span>
                                 </div>
                                 <div className='grid grid-cols-2 gap-3 text-base md:text-lg'>
-                                    <span className='font-semibold text-gray-600'>Account Balance:</span>
-                                    <span>{`$${formatWithCommas(userDetails?.investment.accountBalance)}`}</span>
+                                    <span className='font-semibold text-gray-600'>Phone Number:</span>
+                                    <span>{userDetails?.user.phoneNumber}</span>
                                 </div>
                                 <div className='grid grid-cols-2 gap-3 text-base md:text-lg'>
-                                    <span className='font-semibold text-gray-600'>Investment Package:</span>
-                                    <span>{userDetails?.investment.package}</span>
+                                    <span className='font-semibold text-gray-600'>Country:</span>
+                                    <span>{userDetails?.user.country}</span>
+                                </div>
+                                <div className='grid grid-cols-2 gap-3 text-base md:text-lg'>
+                                    <span className='font-semibold text-gray-600'>Account Balance:</span>
+                                    <span>{`$${formatWithCommas(userDetails?.investment.accountBalance)}`}</span>
                                 </div>
                                 <div className='grid grid-cols-2 gap-3 text-base md:text-lg'>
                                     <span className='font-semibold text-gray-600'>Investment Amount:</span>

@@ -4,7 +4,7 @@ import { Button } from '../ui/button';
 
 interface PricingCardProps {
     planName: string;
-    duration: string;
+    duration: number;
     investmentAmount: string;
     minDeposit: string;
     maxDeposit: string;
@@ -22,7 +22,7 @@ function PricingCard({ planName, investmentAmount, duration, minDeposit, maxDepo
             )}
             <div className="h-32 bg-primary text-center p-4">
                 <h3 className="text-2xl text-white font-semibold mb-1">{planName}</h3>
-                <p className="text-xs text-white">{duration}</p>
+                <p className="text-xs text-white">{duration} days</p>
             </div>
 
             <div className="h-24 w-24 mx-auto -mt-12 shadow-xl rounded-full bg-primary text-white border-[3px] flex flex-col items-center justify-center border-white">

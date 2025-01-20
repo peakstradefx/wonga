@@ -5,9 +5,16 @@ import User from "@/models/User";
 export async function GET() {
   try {
     await connectDB();
-    const users = await User.find({ role: { $ne: "admin" } }).sort({
-      createdAt: -1,
-    });
+    const users = await User.find(
+      { role: { $ne: "admin" } },
+      {
+        firstName: 1,
+        lastName: 1,
+        email: 1,
+        phoneNumber: 1,
+        createdAt: 1,
+      }
+    ).sort({ createdAt: -1 });
     return NextResponse.json(users, { status: 200 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -1,6 +1,7 @@
 "use client"
 import Link from 'next/link'
-import React, { useState } from 'react'
+import { usePathname } from 'next/navigation'
+import React, { useState, useEffect } from 'react'
 import { Button } from '../ui/button'
 import { NavMenu } from './NavMenu'
 import Image from 'next/image'
@@ -9,6 +10,26 @@ import { X } from 'lucide-react'
 
 function NavBar() {
     const [isOpen, setIsOpen] = useState(false)
+    const pathname = usePathname()
+
+    useEffect(() => {
+        // Close menu on route change
+        setIsOpen(false)
+    }, [pathname])
+
+    useEffect(() => {
+        // Lock/unlock body scroll when menu opens/closes
+        if (isOpen) {
+            document.body.style.overflow = 'hidden'
+        } else {
+            document.body.style.overflow = 'unset'
+        }
+
+        // Cleanup function to ensure scroll is restored when component unmounts
+        return () => {
+            document.body.style.overflow = 'unset'
+        }
+    }, [isOpen])
 
     const toggleMenu = () => {
         setIsOpen(!isOpen)
@@ -43,7 +64,6 @@ function NavBar() {
                             )}
                         </button>
                     </div>
-
                     {/* Desktop Navigation */}
                     <div className="hidden w-full lg:flex lg:pl-11" id="navbar">
                         <NavMenu />
@@ -52,17 +72,16 @@ function NavBar() {
                             <Link href="/auth/register"><Button>Sign up</Button></Link>
                         </div>
                     </div>
-
                     {/* Mobile Navigation */}
                     {isOpen && (
-                        <div className="lg:hidden fixed inset-0 top-[73px] z-50 bg-white">
-                            <div className="flex h-full flex-col overflow-y-auto px-4 pt-4 pb-6">
+                        <div className="lg:hidden fixed inset-0 top-[73px] z-50 bg-white overflow-y-auto">
+                            <div className="flex h-full flex-col px-4 pt-4 pb-6">
                                 <NavMenu />
                                 <div className="mt-6 flex flex-col gap-4">
-                                    <Link href="/auth/login" onClick={() => setIsOpen(false)}>
+                                    <Link href="/auth/login">
                                         <Button variant="secondary" className="w-full">Login</Button>
                                     </Link>
-                                    <Link href="/auth/register" onClick={() => setIsOpen(false)}>
+                                    <Link href="/auth/register">
                                         <Button className="w-full">Sign up</Button>
                                     </Link>
                                 </div>

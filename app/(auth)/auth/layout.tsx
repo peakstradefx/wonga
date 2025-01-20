@@ -15,16 +15,6 @@ function layout({
                     <Link href={"/"} className="relative z-20 flex items-center text-lg font-medium">
                         <Image src={logoWhite} width={150} height={82} alt="PeakTrade fx logo" />
                     </Link>
-                    {/* <div className="relative z-20 mt-auto">
-                        <blockquote className="space-y-2">
-                            <p className="text-lg">
-                                &ldquo;This library has saved me countless hours of work and
-                                helped me deliver stunning designs to my clients faster than
-                                ever before.&rdquo;
-                            </p>
-                            <footer className="text-sm">Sofia Davis</footer>
-                        </blockquote>
-                    </div> */}
                 </div>
                 <div className="px-4 pt-10 md:pt-8 lg:p-8">
                     <div className="flex justify-center pb-8">

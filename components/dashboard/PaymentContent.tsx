@@ -39,11 +39,13 @@ function PaymentContent() {
 
         mutate(formData, {
             onSuccess: (response) => {
+                setIsLoading(false);
                 toast.success(response.data.message);
             },
             onError: (error) => {
                 const axiosError = error as AxiosError<{ message: string }>;
-                toast.error(axiosError.response?.data?.message || 'An error occurred');
+                toast.error(axiosError.response?.data?.message);
+                setIsLoading(false);
             }
         });
     };

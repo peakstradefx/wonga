@@ -8,17 +8,50 @@ import InvestmentInformation from "@/models/InvestmentInformation";
 const DAILY_PROFIT_RATE = 0.149;
 const INVESTMENT_DURATION_DAYS = 7;
 
-interface Investment {
+interface ExtendedInvestment {
   _id: string;
   userId: string;
   amount: number;
+  plan: string;
   createdAt: Date;
   lastProfitUpdate?: Date;
-  status: string;
-  toObject(): Investment;
+  lastReturnUpdate: Date;
+  currentReturn: number;
+  dailyReturn: number;
+  maturityDate: Date;
+  completionDate?: Date;
+  status: "active" | "completed";
+  percentageReturn: string;
 }
 
-interface InvestmentInfo {
+interface DetailedInvestmentResponse {
+  investments: {
+    active: ExtendedInvestment[];
+    completed: ExtendedInvestment[];
+  };
+  stats: {
+    totalActiveInvestments: number;
+    totalCompletedInvestments: number;
+    totalInvestmentAmount: number;
+    totalCurrentReturns: number;
+    totalProfit: number;
+  };
+  account: {
+    userId: string;
+    accountBalance: number;
+    package: string;
+    totalReturnsEarned: number;
+    lastInvestmentDate?: Date;
+  };
+  summary: {
+    activeInvestmentsCount: number;
+    completedInvestmentsCount: number;
+    cancelledInvestmentsCount: number;
+    totalLifetimeInvestments: number;
+  };
+}
+
+interface InvestmentInfoType {
   _id: string;
   userId: string;
   accountBalance: number;
@@ -28,50 +61,142 @@ interface InvestmentInfo {
   updatedAt: Date;
 }
 
-// Function to calculate investment profit
-function calculateInvestmentProfit(investment: Investment) {
+// Helper function to calculate daily returns
+function calculateDailyReturns(investment: ExtendedInvestment) {
   const now = new Date();
-  const startDate = new Date(investment.createdAt);
-  const lastUpdateDate = investment.lastProfitUpdate
-    ? new Date(investment.lastProfitUpdate)
-    : startDate;
+  const lastUpdate = new Date(investment.lastReturnUpdate);
 
-  // Calculate total days since investment started
-  const totalDaysActive = Math.floor(
-    (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+  // Skip if already updated today
+  if (lastUpdate.toDateString() === now.toDateString()) {
+    return {
+      newReturn: investment.currentReturn,
+      daysProcessed: 0,
+    };
+  }
+
+  // Calculate days since last update
+  const daysSinceUpdate = Math.floor(
+    (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24)
   );
 
-  // Calculate days since last profit update
-  const daysSinceLastUpdate = Math.floor(
-    (now.getTime() - lastUpdateDate.getTime()) / (1000 * 60 * 60 * 24)
+  // Calculate remaining days until maturity
+  const daysUntilMaturity = Math.floor(
+    (new Date(investment.maturityDate).getTime() - now.getTime()) /
+      (1000 * 60 * 60 * 24)
   );
 
-  // Calculate remaining days until investment period is complete
-  const daysRemaining = Math.max(0, INVESTMENT_DURATION_DAYS - totalDaysActive);
+  // Only process days up to maturity date
+  const daysToProcess = Math.min(
+    daysSinceUpdate,
+    Math.max(0, daysUntilMaturity + 1)
+  );
 
-  // Only calculate new profits if there are days to process
-  const daysToCalculate = Math.min(daysSinceLastUpdate, daysRemaining);
-
-  const dailyProfit = investment.amount * DAILY_PROFIT_RATE;
-  const profitToAdd = Math.max(0, dailyProfit * daysToCalculate);
+  // Calculate new return amount
+  const newReturn =
+    investment.currentReturn + investment.dailyReturn * daysToProcess;
 
   return {
-    profitToAdd,
-    isCompleted: totalDaysActive >= INVESTMENT_DURATION_DAYS,
-    daysActive: Math.min(totalDaysActive, INVESTMENT_DURATION_DAYS),
-    daysRemaining,
-    dailyProfit,
+    newReturn,
+    daysProcessed: daysToProcess,
   };
 }
 
-// Function to handle completed investments
+// POST endpoint (CRON job) to handle profit updates
+export async function POST(req: NextRequest) {
+  try {
+    // Verify authorization
+    const authHeader = req.headers.get("authorization");
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET_KEY}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await connectDB();
+
+    // Get all active investments
+    const activeInvestments = await CreateInvestment.find({ status: "active" });
+    const results = [];
+
+    for (const investment of activeInvestments) {
+      try {
+        const { newReturn, daysProcessed } = calculateDailyReturns(investment);
+
+        if (daysProcessed > 0) {
+          // Update investment returns
+          await CreateInvestment.findByIdAndUpdate(investment._id, {
+            $set: {
+              currentReturn: newReturn,
+              lastReturnUpdate: new Date(),
+            },
+          });
+
+          // Update user's investment information
+          await InvestmentInformation.findOneAndUpdate(
+            { userId: investment.userId },
+            {
+              $inc: {
+                totalReturnsEarned: newReturn - investment.currentReturn,
+              },
+            }
+          );
+
+          results.push({
+            investmentId: investment._id,
+            profitAdded: newReturn - investment.currentReturn,
+            daysProcessed,
+          });
+        }
+
+        // Check if investment has matured
+        if (new Date() >= new Date(investment.maturityDate)) {
+          // Get investment info for the user
+          const investmentInfo = (await InvestmentInformation.findOne({
+            userId: investment.userId,
+          })) as unknown as InvestmentInfoType;
+
+          if (!investmentInfo) {
+            throw new Error("Investment information not found");
+          }
+
+          // Handle the completed investment
+          const totalProfit = await handleCompletedInvestment(
+            investment,
+            investmentInfo
+          );
+
+          results.push({
+            investmentId: investment._id,
+            status: "completed",
+            totalProfit,
+          });
+        }
+      } catch (error) {
+        console.error(`Error processing investment ${investment._id}:`, error);
+        results.push({
+          investmentId: investment._id,
+          error: (error as Error).message,
+        });
+      }
+    }
+
+    return NextResponse.json({
+      message: "Daily profits updated successfully",
+      results,
+    });
+  } catch (error) {
+    console.error("Error updating daily profits:", error);
+    return NextResponse.json(
+      { error: "Failed to update daily profits" },
+      { status: 500 }
+    );
+  }
+}
+
 async function handleCompletedInvestment(
-  investment: Investment,
-  investmentInfo: InvestmentInfo
+  investment: ExtendedInvestment,
+  investmentInfo: InvestmentInfoType
 ) {
   const totalProfit =
     investment.amount * DAILY_PROFIT_RATE * INVESTMENT_DURATION_DAYS;
-
   try {
     // Update investment status
     await CreateInvestment.findByIdAndUpdate(investment._id, {
@@ -99,7 +224,6 @@ async function handleCompletedInvestment(
       investmentAmount: investment.amount,
       userId: investment.userId,
     });
-
     return totalProfit;
   } catch (error) {
     console.error(`Error completing investment ${investment._id}:`, error);
@@ -107,7 +231,6 @@ async function handleCompletedInvestment(
   }
 }
 
-// GET endpoint to fetch current profit statistics
 export async function GET() {
   try {
     const session = await getServerSession(options);
@@ -117,148 +240,99 @@ export async function GET() {
 
     await connectDB();
 
+    // Get all investments for the user
+    const activeInvestments = await CreateInvestment.find({
+      userId: session.user.id,
+      status: "active",
+    }).sort({ createdAt: -1 });
+
+    // Get completed investments (no time limit)
+    const completedInvestments = await CreateInvestment.find({
+      userId: session.user.id,
+      status: "completed",
+    }).sort({ completionDate: -1 });
+
+    // Get user's investment information
     const investmentInfo = await InvestmentInformation.findOne({
       userId: session.user.id,
     });
 
-    if (!investmentInfo) {
-      return NextResponse.json(
-        { error: "Investment information not found" },
-        { status: 404 }
-      );
-    }
-
-    // Get active investments
-    const activeInvestments = await CreateInvestment.find({
-      userId: session.user.id,
-      status: "active",
-    });
-
-    // Calculate current progress for each active investment
-    const investmentsWithProgress = activeInvestments.map((investment) => {
-      const { isCompleted, daysActive, daysRemaining, dailyProfit } =
-        calculateInvestmentProfit(investment);
-
-      return {
-        ...investment.toObject(),
-        daysActive,
-        daysRemaining,
-        isCompleted,
-        dailyProfit,
-        expectedTotalProfit: dailyProfit * INVESTMENT_DURATION_DAYS,
-      };
-    });
-
-    // Get recently completed investments
-    const completedInvestments = await CreateInvestment.find({
-      userId: session.user.id,
-      status: "completed",
-    })
-      .sort({ updatedAt: -1 })
-      .limit(5);
-
-    return NextResponse.json({
-      accountBalance: investmentInfo.accountBalance || 0,
-      totalProfit: investmentInfo.totalProfit || 0,
-      investmentAmount: investmentInfo.investmentAmount || 0,
-      activeInvestments: investmentsWithProgress,
-      recentlyCompleted: completedInvestments,
-    });
-  } catch (error) {
-    console.error("Error fetching profit information:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch profit information" },
-      { status: 500 }
+    // Process active investments with updated returns
+    const processedActiveInvestments = await Promise.all(
+      activeInvestments.map(async (investment) => {
+        const { newReturn } = calculateDailyReturns(investment);
+        return {
+          ...investment.toObject(),
+          currentReturn: newReturn,
+          percentageReturn: ((newReturn / investment.amount) * 100).toFixed(2),
+        };
+      })
     );
-  }
-}
 
-// POST endpoint (CRON job) to handle profit updates
-export async function POST(req: NextRequest) {
-  try {
-    // Verify authorization
-    const authHeader = req.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET_KEY}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    // Process completed investments
+    const processedCompletedInvestments = completedInvestments.map(
+      (investment) => ({
+        ...investment.toObject(),
+        percentageReturn: (
+          (investment.currentReturn / investment.amount) *
+          100
+        ).toFixed(2),
+      })
+    );
 
-    await connectDB();
+    // Calculate overall statistics
+    const totalActiveInvestments = processedActiveInvestments.reduce(
+      (sum, inv) => sum + inv.amount,
+      0
+    );
+    const totalCompletedInvestments = processedCompletedInvestments.reduce(
+      (sum, inv) => sum + inv.amount,
+      0
+    );
+    const totalCurrentReturns = processedActiveInvestments.reduce(
+      (sum, inv) => sum + inv.currentReturn,
+      0
+    );
+    const totalProfit = processedCompletedInvestments.reduce(
+      (sum, inv) => sum + inv.currentReturn,
+      0
+    );
 
-    // Get all investment information records
-    const investmentInfos = await InvestmentInformation.find({});
-    const updateResults = [];
+    const response: DetailedInvestmentResponse = {
+      investments: {
+        active: processedActiveInvestments,
+        completed: processedCompletedInvestments,
+      },
+      stats: {
+        totalActiveInvestments,
+        totalCompletedInvestments,
+        totalInvestmentAmount:
+          totalActiveInvestments + totalCompletedInvestments,
+        totalCurrentReturns,
+        totalProfit,
+      },
+      account: {
+        userId: session.user.id,
+        accountBalance: investmentInfo?.accountBalance || 0,
+        package: investmentInfo?.package || "No investment",
+        totalReturnsEarned: investmentInfo?.totalReturnsEarned || 0,
+        lastInvestmentDate: investmentInfo?.lastInvestmentDate,
+      },
+      summary: {
+        activeInvestmentsCount: processedActiveInvestments.length,
+        completedInvestmentsCount: processedCompletedInvestments.length,
+        cancelledInvestmentsCount:
+          investmentInfo?.investmentStats?.cancelledInvestmentsCount || 0,
+        totalLifetimeInvestments:
+          investmentInfo?.investmentStats?.totalLifetimeInvestments || 0,
+      },
+    };
 
-    for (const info of investmentInfos) {
-      // Get active investments for current user
-      const activeInvestments = await CreateInvestment.find({
-        userId: info.userId,
-        status: "active",
-      });
-
-      for (const investment of activeInvestments) {
-        try {
-          // Skip if already updated today
-          if (investment.lastProfitUpdate) {
-            const lastUpdate = new Date(investment.lastProfitUpdate);
-            if (lastUpdate.toDateString() === new Date().toDateString()) {
-              continue;
-            }
-          }
-
-          const { profitToAdd, isCompleted } =
-            calculateInvestmentProfit(investment);
-
-          if (isCompleted) {
-            const totalProfit = await handleCompletedInvestment(
-              investment,
-              info
-            );
-            updateResults.push({
-              investmentId: investment._id,
-              status: "completed",
-              totalProfit,
-            });
-          } else if (profitToAdd > 0) {
-            // Update investment's last profit update time
-            await CreateInvestment.findByIdAndUpdate(investment._id, {
-              lastProfitUpdate: new Date(),
-            });
-
-            // Add profit to total
-            await InvestmentInformation.findByIdAndUpdate(info._id, {
-              $inc: { totalProfit: profitToAdd },
-              $set: { updatedAt: new Date() },
-            });
-
-            updateResults.push({
-              investmentId: investment._id,
-              status: "updated",
-              profitAdded: profitToAdd,
-            });
-          }
-        } catch (error) {
-          console.error(
-            `Error processing investment ${investment._id}:`,
-            error
-          );
-          updateResults.push({
-            investmentId: investment._id,
-            status: "error",
-            error: (error as Error).message,
-          });
-        }
-      }
-    }
-
-    return NextResponse.json({
-      message:
-        "Daily profits updated and completed investments processed successfully",
-      results: updateResults,
-    });
+    return NextResponse.json(response);
   } catch (error) {
-    console.error("Error updating daily profits:", error);
+    console.error("Error fetching investment information:", error);
     return NextResponse.json(
-      { error: "Failed to update daily profits" },
+      { error: "Failed to fetch investment information" },
       { status: 500 }
     );
   }

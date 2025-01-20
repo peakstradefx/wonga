@@ -1,7 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/investment-profit",
+      "path": "/api/cron/update-profits",
       "schedule": "0 0 * * *"
     }
   ]

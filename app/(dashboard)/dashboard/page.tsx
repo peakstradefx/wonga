@@ -14,13 +14,12 @@ function DashboardHome() {
   const lastName = session?.data?.user?.lastName || ""
 
   const { data } = useGetInvestments()
-  const investment = data?.data
-  const accountBalance = investment?.accountBalance || 0
-  const investmentAmount = investment?.activeInvestments?.[0]?.amount || 0
-  const profit = investment?.activeInvestments?.[0]?.dailyProfit || 0
-  const expectedProfit = investment?.activeInvestments?.[0]?.expectedTotalProfit || 0
-  const investmentPlan = investment?.activeInvestments?.[0]?.plan || "No plan"
-  const daysRemaining = investment?.activeInvestments?.[0]?.daysRemaining
+  const investment = data?.data || []
+  const accountBalance = investment?.account?.accountBalance || 0
+  const totalInvestmentAmount = investment?.stats?.totalInvestmentAmount || 0
+  const totalProfit = investment?.stats?.totalProfit || 0
+  const totalPackage = investment?.summary?.totalLifetimeInvestments || 0
+  const activePackage = investment?.summary?.activeInvestmentsCount || 0
 
   return (
     <DashboardContainer>
@@ -56,7 +55,7 @@ function DashboardHome() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Investment amount
+              Investment Amount
             </CardTitle>
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -72,41 +71,13 @@ function DashboardHome() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${formatWithCommas(investmentAmount)}</div>
-            {/* <p className="text-xs text-muted-foreground">
-                  +20.1% from last month
-                </p> */}
+            <div className="text-2xl font-bold">${formatWithCommas(totalInvestmentAmount)}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Current Profit
-            </CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-            >
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">+ ${formatWithCommas(profit)}</div>
-            <p className="text-xs text-muted-foreground">
-              +14.9% every day for 7 days
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Expected Profit
+              Investment profit
             </CardTitle>
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -122,7 +93,51 @@ function DashboardHome() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${formatWithCommas(expectedProfit)}</div>
+            <div className="text-2xl font-bold">${formatWithCommas(totalProfit)}</div>
+            {investment.investments?.active?.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                +14.9% from last month
+              </p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Bonus
+            </CardTitle>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              className="h-4 w-4 text-muted-foreground"
+            >
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{investment.investments?.active?.length > 0 ? "$50" : "$0"}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Package
+            </CardTitle>
+            <svg xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 1024 1024"
+              className="h-4 w-4 text-muted-foreground">
+              <path fill="currentColor" d="M872 394c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8H708V152c0-4.4-3.6-8-8-8h-64c-4.4 0-8 3.6-8 8v166H400V152c0-4.4-3.6-8-8-8h-64c-4.4 0-8 3.6-8 8v166H152c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h168v236H152c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h168v166c0 4.4 3.6 8 8 8h64c4.4 0 8-3.6 8-8V706h228v166c0 4.4 3.6 8 8 8h64c4.4 0 8-3.6 8-8V706h164c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8H708V394zM628 630H400V394h228z" />
+            </svg>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totalPackage}</div>
           </CardContent>
         </Card>
         <Card>
@@ -130,21 +145,16 @@ function DashboardHome() {
             <CardTitle className="text-sm font-medium">
               Active Package
             </CardTitle>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              strokeWidth="2"
-              className="h-4 w-4 text-muted-foreground"
-              width="20" height="20" viewBox="0 0 24 24">
-              <path fill="currentColor" d="M22 12v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h3.17A3 3 0 0 1 6 5a3 3 0 0 1 3-3c1 0 1.88.5 2.43 1.24v-.01L12 4l.57-.77v.01C13.12 2.5 14 2 15 2a3 3 0 0 1 3 3a3 3 0 0 1-.17 1H21a2 2 0 0 1 2 2v3a1 1 0 0 1-1 1M4 20h7v-8H4zm16 0v-8h-7v8zM9 4a1 1 0 0 0-1 1a1 1 0 0 0 1 1a1 1 0 0 0 1-1a1 1 0 0 0-1-1m6 0a1 1 0 0 0-1 1a1 1 0 0 0 1 1a1 1 0 0 0 1-1a1 1 0 0 0-1-1M3 8v2h8V8zm10 0v2h8V8z" />
+            <svg xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 1024 1024"
+              className="h-4 w-4 text-muted-foreground">
+              <path fill="currentColor" d="M872 394c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8H708V152c0-4.4-3.6-8-8-8h-64c-4.4 0-8 3.6-8 8v166H400V152c0-4.4-3.6-8-8-8h-64c-4.4 0-8 3.6-8 8v166H152c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h168v236H152c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h168v166c0 4.4 3.6 8 8 8h64c4.4 0 8-3.6 8-8V706h228v166c0 4.4 3.6 8 8 8h64c4.4 0 8-3.6 8-8V706h164c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8H708V394zM628 630H400V394h228z" />
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{investmentPlan}</div>
-            {daysRemaining && (
-              <p className="text-xs text-muted-foreground">
-                {daysRemaining} days remaining
-              </p>
-            )}
+            <div className="text-2xl font-bold">{activePackage}</div>
           </CardContent>
         </Card>
       </div>
