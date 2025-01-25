@@ -88,8 +88,8 @@ export async function GET(
         daysActive: Math.min(daysActive, 7),
         daysRemaining: Math.max(0, 7 - daysActive),
         isCompleted: daysActive >= 7,
-        expectedProfit: investment.amount * 0.149 * 7,
-        currentProfit: investment.amount * 0.149 * maxDaysToCalculate,
+        expectedProfit: investment.amount * 0.143 * 7,
+        currentProfit: investment.amount * 0.143 * maxDaysToCalculate,
       };
     });
 

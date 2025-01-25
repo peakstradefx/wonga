@@ -97,7 +97,7 @@ function DashboardHome() {
             <div className="text-2xl font-bold">${formatWithCommas(totalProfit)}</div>
             {investment.investments?.active?.length > 0 && (
               <p className="text-xs text-muted-foreground">
-                +14.9% daily
+                +14.3% daily
               </p>
             )}
           </CardContent>
