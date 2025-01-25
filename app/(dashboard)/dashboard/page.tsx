@@ -4,6 +4,7 @@ import TradingViewTickerTape from '@/components/dashboard/TradingViewTickerTape'
 import TradingViewWidget from '@/components/dashboard/TradingViewWidget'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import useGetInvestments from '@/hooks/queries/useGetInvestments'
+import useGetUserDetails from '@/hooks/queries/useGetUserDetails'
 import { formatWithCommas } from '@/utils/formatNumberWithComma'
 import { useSession } from 'next-auth/react'
 import React from 'react'
@@ -13,11 +14,14 @@ function DashboardHome() {
   const firstName = session?.data?.user?.firstName || "User"
   const lastName = session?.data?.user?.lastName || ""
 
+  const userId = session?.data?.user?.id ?? ""
+
   const { data } = useGetInvestments()
+  const { data: userData } = useGetUserDetails(userId)
   const investment = data?.data || []
   const accountBalance = investment?.account?.accountBalance || 0
   const totalInvestmentAmount = investment?.stats?.totalInvestmentAmount || 0
-  const totalProfit = investment?.stats?.totalProfit || 0
+  const totalProfit = userData?.data?.investment?.totalProfit || 0
   const totalPackage = investment?.summary?.totalLifetimeInvestments || 0
   const activePackage = investment?.summary?.activeInvestmentsCount || 0
 
@@ -25,9 +29,6 @@ function DashboardHome() {
     <DashboardContainer>
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-2xl font-semibold tracking-tight">Welcome, <span>{firstName}</span> <span>{lastName}</span></h2>
-      </div>
-      <div className='text-sm'>
-        Welcome to PeaksTrade FX, please note that this trade platform does not make use of any account manager and hence any payment made outside the address provided on this site is at user risk. Contact our support team at support@peakstradefx.com
       </div>
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -96,7 +97,7 @@ function DashboardHome() {
             <div className="text-2xl font-bold">${formatWithCommas(totalProfit)}</div>
             {investment.investments?.active?.length > 0 && (
               <p className="text-xs text-muted-foreground">
-                +14.9% from last month
+                +14.9% daily
               </p>
             )}
           </CardContent>

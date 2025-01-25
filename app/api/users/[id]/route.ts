@@ -88,10 +88,16 @@ export async function GET(
         daysActive: Math.min(daysActive, 7),
         daysRemaining: Math.max(0, 7 - daysActive),
         isCompleted: daysActive >= 7,
-        expectedProfit: investment.amount * 0.05 * 7,
-        currentProfit: investment.amount * 0.05 * maxDaysToCalculate,
+        expectedProfit: investment.amount * 0.149 * 7,
+        currentProfit: investment.amount * 0.149 * maxDaysToCalculate,
       };
     });
+
+    // Calculate total current profit from active investments
+    const totalCurrentProfit = investmentsWithProgress.reduce(
+      (total, investment) => total + investment.currentProfit,
+      0
+    );
 
     // Get completed investments
     const completedInvestments = await CreateInvestment.find({
@@ -120,7 +126,7 @@ export async function GET(
         kyc: kycDetails[0] || null,
         investment: {
           accountBalance: investmentInfo?.accountBalance || 0,
-          totalProfit: investmentInfo?.totalProfit || 0,
+          totalProfit: totalCurrentProfit, // Updated to sum of currentProfit
           investmentAmount: investmentInfo?.totalInvestmentAmount || 0,
           package: investmentInfo?.package || "No investment",
           activeInvestments: investmentsWithProgress,
