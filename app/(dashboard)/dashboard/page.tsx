@@ -19,9 +19,9 @@ function DashboardHome() {
   const { data } = useGetInvestments()
   const { data: userData } = useGetUserDetails(userId)
   const investment = data?.data || []
-  const accountBalance = investment?.account?.accountBalance || 0
-  const totalInvestmentAmount = investment?.stats?.totalInvestmentAmount || 0
-  const totalProfit = userData?.data?.investment?.totalProfit || 0
+  const accountBalance = investment?.account?.accountBalance.toFixed(2) || 0
+  const totalInvestmentAmount = userData?.data?.investment?.investmentAmount.toFixed(2) || 0
+  const totalProfit = userData?.data?.investment?.totalProfit.toFixed(2) || 0
   const totalPackage = investment?.summary?.totalLifetimeInvestments || 0
   const activePackage = investment?.summary?.activeInvestmentsCount || 0
 
@@ -121,7 +121,7 @@ function DashboardHome() {
             </svg>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{investment.investments?.active?.length > 0 ? "$50" : "$0"}</div>
+            <div className="text-2xl font-bold">{investment.investments?.active?.length > 0 ? "$50.00" : "$0"}</div>
           </CardContent>
         </Card>
         <Card>

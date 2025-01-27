@@ -8,6 +8,47 @@ import { options } from "../../auth/[...nextauth]/options";
 import KYC from "@/models/KYC";
 import PaymentProof from "@/models/PaymentProof";
 import Withdrawal from "@/models/Withdrawal";
+import { Types } from "mongoose";
+
+interface BaseInvestment {
+  _id: Types.ObjectId;
+  userId: string;
+  amount: number;
+  status: "active" | "completed" | "pending";
+  createdAt: Date;
+  updatedAt: Date;
+  lastProfitUpdate?: Date;
+}
+
+interface ProcessedInvestment extends Omit<BaseInvestment, "_id"> {
+  _id: string;
+  daysActive: number;
+  daysRemaining: number;
+  isCompleted: boolean;
+  expectedProfit: number;
+  currentProfit: number;
+}
+
+interface UserResponse {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phoneNumber: string;
+  country: string;
+  createdAt: Date;
+  status: string;
+  isActivatedByAdmin: boolean;
+}
+
+interface InvestmentResponse {
+  accountBalance: number;
+  totalProfit: number;
+  investmentAmount: number;
+  package: string;
+  activeInvestments: ProcessedInvestment[];
+  recentlyCompleted: BaseInvestment[];
+}
 
 export async function GET(
   request: NextRequest,
@@ -43,13 +84,13 @@ export async function GET(
       .sort({ createdAt: -1 })
       .limit(1);
 
-    // Fetch Deposit information
+    // Fetch Withdrawal information
     const withdrawalDetails = await Withdrawal.find({ userId: id })
       .sort({ createdAt: -1 })
       .limit(1);
 
     // Fetch investment information
-    const investmentInfo = await InvestmentInformation.findOne({
+    let investmentInfo = await InvestmentInformation.findOne({
       userId: id,
     });
 
@@ -59,7 +100,12 @@ export async function GET(
       status: "active",
     });
 
-    // Calculate investment progress
+    let totalCurrentProfit = 0;
+    let totalActiveInvestmentAmount = 0;
+    const completedInvestmentIds: string[] = [];
+    const remainingActiveInvestments: ProcessedInvestment[] = [];
+
+    // Calculate investment progress and identify completed investments
     const investmentsWithProgress = activeInvestments.map((investment) => {
       const daysActive = Math.ceil(
         Math.abs(new Date().getTime() - investment.createdAt.getTime()) /
@@ -83,58 +129,97 @@ export async function GET(
         )
       );
 
-      return {
-        ...investment.toObject(),
+      const isCompleted = daysActive >= 7;
+      const expectedProfit = investment.amount * 0.143 * 7;
+      const currentProfit = investment.amount * 0.143 * maxDaysToCalculate;
+
+      const processedInvestment: ProcessedInvestment = {
+        _id: investment._id.toString(),
+        userId: investment.userId,
+        amount: investment.amount,
+        status: investment.status as "active" | "completed" | "pending",
+        createdAt: investment.createdAt,
+        updatedAt: investment.updatedAt,
+        lastProfitUpdate: investment.lastProfitUpdate,
         daysActive: Math.min(daysActive, 7),
         daysRemaining: Math.max(0, 7 - daysActive),
-        isCompleted: daysActive >= 7,
-        expectedProfit: investment.amount * 0.143 * 7,
-        currentProfit: investment.amount * 0.143 * maxDaysToCalculate,
+        isCompleted,
+        expectedProfit,
+        currentProfit,
       };
+
+      if (isCompleted) {
+        completedInvestmentIds.push(investment._id.toString());
+      } else {
+        remainingActiveInvestments.push(processedInvestment);
+        totalCurrentProfit += currentProfit;
+        totalActiveInvestmentAmount += investment.amount;
+      }
+
+      return processedInvestment;
     });
 
-    // Calculate total current profit from active investments
-    const totalCurrentProfit = investmentsWithProgress.reduce(
-      (total, investment) => total + investment.currentProfit,
-      0
-    );
+    // Process completed investments
+    if (completedInvestmentIds.length > 0) {
+      // Calculate total amount to add to account balance
+      const completedInvestmentsTotal = investmentsWithProgress
+        .filter((inv) => completedInvestmentIds.includes(inv._id))
+        .reduce((total, inv) => total + inv.amount + inv.expectedProfit, 0);
 
-    // Get completed investments
-    const completedInvestments = await CreateInvestment.find({
+      // Update investment statuses to completed
+      await CreateInvestment.updateMany(
+        { _id: { $in: completedInvestmentIds } },
+        { $set: { status: "completed" } }
+      );
+
+      // Update account balance and reset totalInvestmentAmount for completed investments
+      investmentInfo = await InvestmentInformation.findOneAndUpdate(
+        { userId: id },
+        {
+          $inc: { accountBalance: completedInvestmentsTotal },
+          $set: { totalInvestmentAmount: totalActiveInvestmentAmount },
+        },
+        { new: true }
+      );
+    }
+
+    // Get recently completed investments
+    const recentlyCompleted = await CreateInvestment.find({
       userId: id,
       status: "completed",
     })
       .sort({ updatedAt: -1 })
       .limit(5);
 
-    // Combine and return all data
-    return NextResponse.json(
-      {
-        user: {
-          id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          country: user.country,
-          createdAt: user.createdAt,
-          status: user.status,
-          isActivatedByAdmin: user.isActivatedByAdmin,
-        },
-        depositDetails: depositDetails[0] || null,
-        withdrawalDetails: withdrawalDetails[0] || null,
-        kyc: kycDetails[0] || null,
-        investment: {
-          accountBalance: investmentInfo?.accountBalance || 0,
-          totalProfit: totalCurrentProfit, // Updated to sum of currentProfit
-          investmentAmount: investmentInfo?.totalInvestmentAmount || 0,
-          package: investmentInfo?.package || "No investment",
-          activeInvestments: investmentsWithProgress,
-          recentlyCompleted: completedInvestments,
-        },
-      },
-      { status: 200 }
-    );
+    const response = {
+      user: {
+        id: user._id.toString(),
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        country: user.country,
+        createdAt: user.createdAt,
+        status: user.status,
+        isActivatedByAdmin: user.isActivatedByAdmin,
+      } as UserResponse,
+      depositDetails: depositDetails[0] || null,
+      withdrawalDetails: withdrawalDetails[0] || null,
+      kyc: kycDetails[0] || null,
+      investment: {
+        accountBalance: investmentInfo?.accountBalance || 0,
+        totalProfit: totalCurrentProfit,
+        investmentAmount: totalActiveInvestmentAmount,
+        package:
+          remainingActiveInvestments.length > 0
+            ? investmentInfo?.package
+            : "No investment",
+        activeInvestments: remainingActiveInvestments,
+        recentlyCompleted,
+      } as InvestmentResponse,
+    };
+
+    return NextResponse.json(response, { status: 200 });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json({ error: errorMessage }, { status: 400 });

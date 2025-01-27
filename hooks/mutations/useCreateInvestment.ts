@@ -15,6 +15,9 @@ export default function useCreateInvestment() {
       queryClient.invalidateQueries({
         queryKey: ["investments"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["user-details"],
+      });
     },
   });
 }
