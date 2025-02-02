@@ -1,19 +1,23 @@
 "use client"
 import React from 'react'
 import DashboardContainer from '@/components/dashboard/DashboardContainer'
-import useGetInvestments from '@/hooks/queries/useGetInvestments'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import useGetUserDetails from '@/hooks/queries/useGetUserDetails'
+import { formatWithCommas } from '@/utils/formatNumberWithComma'
 
 interface Investment {
     _id: string;
     amount: number;
     createdAt: string;
-    currentReturn: number;
+    currentProfit: number;
+    expectedProfit: number;
     lastProfitUpdate: string;
     percentageReturn: string;
     plan: string;
+    profit: number;
     status: string;
     updatedAt: string;
     totalReturnsEarned: string;
@@ -21,9 +25,11 @@ interface Investment {
 }
 
 function PackagesPage() {
-    const { data } = useGetInvestments()
-    const activeInvestments = data?.data?.investments?.active
-    const completedInvestments = data?.data?.investments?.completed
+    const session = useSession()
+    const userId = session?.data?.user?.id ?? ""
+    const { data: userData } = useGetUserDetails(userId)
+    const activeInvestments = userData?.data?.investment?.activeInvestments
+    const completedInvestments = userData?.data?.investment?.recentlyCompleted
 
     return (
         <DashboardContainer>
@@ -57,9 +63,12 @@ function PackagesPage() {
                                         <span className="font-semibold">Daily</span>
                                     </li>
                                     <li className="flex items-center justify-between space-x-3 text-sm">
-
-                                        <span>Percentage returns: </span>
-                                        <span className="font-semibold">${investment?.percentageReturn}</span>
+                                        <span>Current Profit: </span>
+                                        <span className="font-semibold">${formatWithCommas(Number(investment?.currentProfit?.toFixed(2)))}</span>
+                                    </li>
+                                    <li className="flex items-center justify-between space-x-3 text-sm">
+                                        <span>Expected Profit: </span>
+                                        <span className="font-semibold">${formatWithCommas(Number(investment?.expectedProfit?.toFixed(2)))}</span>
                                     </li>
                                     <li className="flex items-center justify-between space-x-3 text-sm">
 
@@ -91,7 +100,7 @@ function PackagesPage() {
                                         <ul role="list" className="mb-8 space-y-4 text-left">
                                             <li className="flex items-center justify-between space-x-3 text-sm">
                                                 <span>Amount Invested:</span>
-                                                <span className="font-semibold">${investment?.amount}</span>
+                                                <span className="font-semibold">${formatWithCommas(investment?.amount)}</span>
                                             </li>
                                             <li className="flex items-center justify-between space-x-3 text-sm">
 
@@ -100,8 +109,8 @@ function PackagesPage() {
                                             </li>
                                             <li className="flex items-center justify-between space-x-3 text-sm">
 
-                                                <span>Percentage returns: </span>
-                                                <span className="font-semibold">${investment?.percentageReturn}</span>
+                                                <span>Profit made: </span>
+                                                <span className="font-semibold">${formatWithCommas(Number(investment?.profit.toFixed(2)))}</span>
                                             </li>
                                             <li className="flex items-center justify-between space-x-3 text-sm">
 

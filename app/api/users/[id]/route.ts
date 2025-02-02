@@ -19,6 +19,9 @@ interface BaseInvestment {
   updatedAt: Date;
   lastProfitUpdate?: Date;
 }
+interface CompletedInvestment extends BaseInvestment {
+  profit: number;
+}
 
 interface ProcessedInvestment extends Omit<BaseInvestment, "_id"> {
   _id: string;
@@ -94,90 +97,111 @@ export async function GET(
       userId: id,
     });
 
-    // Get active investments
-    const activeInvestments = await CreateInvestment.find({
+    // Get all investments
+    const allInvestments = await CreateInvestment.find({
       userId: id,
-      status: "active",
-    });
+    }).sort({ updatedAt: -1 });
+
+    // Get active investments
+    const activeInvestments = allInvestments.filter(
+      (inv) => inv.status === "active"
+    );
+
+    // Calculate current investment amount
+    const currentInvestmentAmount = activeInvestments.reduce(
+      (total, inv) => total + inv.amount,
+      0
+    );
 
     let totalCurrentProfit = 0;
-    let totalActiveInvestmentAmount = 0;
     const completedInvestmentIds: string[] = [];
     const remainingActiveInvestments: ProcessedInvestment[] = [];
 
-    // Calculate investment progress and identify completed investments
-    const investmentsWithProgress = activeInvestments.map((investment) => {
+    // Process and calculate profits for all investments
+    const processInvestment = (investment: BaseInvestment) => {
       const daysActive = Math.ceil(
         Math.abs(new Date().getTime() - investment.createdAt.getTime()) /
           (1000 * 60 * 60 * 24)
       );
 
-      const startDate = new Date(investment.createdAt);
-      const lastUpdateDate = investment.lastProfitUpdate
-        ? new Date(investment.lastProfitUpdate)
-        : startDate;
+      // For completed investments, use full profit
+      if (investment.status === "completed") {
+        const profit = investment.amount * 0.143 * 7;
+        totalCurrentProfit += profit;
+        return profit;
+      }
 
+      // Calculate effective days for profit (starting from day 2)
+      const effectiveDaysActive = Math.max(0, daysActive - 1);
+
+      // Calculate remaining days and profit rate
+      // Increase daily rate to maintain same total profit over 6 days instead of 7
+      const dailyProfitRate = (0.143 * 7) / 6; // Distribute total profit over 6 days
+
+      // For active investments, calculate based on effective days
       const maxDaysToCalculate = Math.min(
-        7 -
-          Math.ceil(
-            Math.abs(lastUpdateDate.getTime() - startDate.getTime()) /
-              (1000 * 60 * 60 * 24)
-          ),
-        Math.ceil(
-          Math.abs(new Date().getTime() - lastUpdateDate.getTime()) /
-            (1000 * 60 * 60 * 24)
-        )
+        6, // Max 6 days of profit accumulation
+        effectiveDaysActive
       );
 
       const isCompleted = daysActive >= 7;
-      const expectedProfit = investment.amount * 0.143 * 7;
-      const currentProfit = investment.amount * 0.143 * maxDaysToCalculate;
-
-      const processedInvestment: ProcessedInvestment = {
-        _id: investment._id.toString(),
-        userId: investment.userId,
-        amount: investment.amount,
-        status: investment.status as "active" | "completed" | "pending",
-        createdAt: investment.createdAt,
-        updatedAt: investment.updatedAt,
-        lastProfitUpdate: investment.lastProfitUpdate,
-        daysActive: Math.min(daysActive, 7),
-        daysRemaining: Math.max(0, 7 - daysActive),
-        isCompleted,
-        expectedProfit,
-        currentProfit,
-      };
+      const expectedProfit = investment.amount * 0.143 * 7; // Keep same total expected profit
+      const currentProfit = isCompleted
+        ? expectedProfit
+        : investment.amount * dailyProfitRate * maxDaysToCalculate;
 
       if (isCompleted) {
         completedInvestmentIds.push(investment._id.toString());
+        totalCurrentProfit += expectedProfit;
       } else {
+        const processedInvestment: ProcessedInvestment = {
+          _id: investment._id.toString(),
+          userId: investment.userId,
+          amount: investment.amount,
+          status: investment.status as "active" | "completed" | "pending",
+          createdAt: investment.createdAt,
+          updatedAt: investment.updatedAt,
+          lastProfitUpdate: investment.lastProfitUpdate,
+          daysActive: Math.min(daysActive, 7),
+          daysRemaining: Math.max(0, 7 - daysActive),
+          isCompleted,
+          expectedProfit,
+          currentProfit,
+        };
         remainingActiveInvestments.push(processedInvestment);
         totalCurrentProfit += currentProfit;
-        totalActiveInvestmentAmount += investment.amount;
       }
 
-      return processedInvestment;
-    });
+      return currentProfit;
+    };
+
+    // Process all investments to calculate total profit
+    allInvestments.forEach(processInvestment);
 
     // Process completed investments
     if (completedInvestmentIds.length > 0) {
-      // Calculate total amount to add to account balance
-      const completedInvestmentsTotal = investmentsWithProgress
-        .filter((inv) => completedInvestmentIds.includes(inv._id))
-        .reduce((total, inv) => total + inv.amount + inv.expectedProfit, 0);
-
       // Update investment statuses to completed
       await CreateInvestment.updateMany(
         { _id: { $in: completedInvestmentIds } },
         { $set: { status: "completed" } }
       );
 
-      // Update account balance and reset totalInvestmentAmount for completed investments
+      // Calculate profits for newly completed investments
+      const newlyCompletedInvestments = activeInvestments.filter((inv) =>
+        completedInvestmentIds.includes(inv._id.toString())
+      );
+
+      const newlyCompletedProfit = newlyCompletedInvestments.reduce(
+        (total, inv) => total + inv.amount * 0.143 * 7,
+        0
+      );
+
+      // Update account balance with only the new profits
       investmentInfo = await InvestmentInformation.findOneAndUpdate(
         { userId: id },
         {
-          $inc: { accountBalance: completedInvestmentsTotal },
-          $set: { totalInvestmentAmount: totalActiveInvestmentAmount },
+          $inc: { accountBalance: newlyCompletedProfit },
+          $set: { totalInvestmentAmount: currentInvestmentAmount },
         },
         { new: true }
       );
@@ -190,6 +214,13 @@ export async function GET(
     })
       .sort({ updatedAt: -1 })
       .limit(5);
+
+    // Add profit calculation for completed investments
+    const recentlyCompletedWithProfits: CompletedInvestment[] =
+      recentlyCompleted.map((investment) => ({
+        ...investment.toObject(),
+        profit: investment.amount * 0.143 * 7, // Calculate total profit for completed investment
+      }));
 
     const response = {
       user: {
@@ -209,13 +240,13 @@ export async function GET(
       investment: {
         accountBalance: investmentInfo?.accountBalance || 0,
         totalProfit: totalCurrentProfit,
-        investmentAmount: totalActiveInvestmentAmount,
+        investmentAmount: currentInvestmentAmount,
         package:
           remainingActiveInvestments.length > 0
             ? investmentInfo?.package
-            : "No investment",
+            : "No active investment",
         activeInvestments: remainingActiveInvestments,
-        recentlyCompleted,
+        recentlyCompleted: recentlyCompletedWithProfits, // Use the new array with profits
       } as InvestmentResponse,
     };
 
